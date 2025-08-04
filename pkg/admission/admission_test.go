@@ -564,3 +564,54 @@ type fakeAdmitter struct {
 func (f *fakeAdmitter) Admit(_ *admission.Request) (*admissionv1.AdmissionResponse, error) {
 	return &f.response, f.err
 }
+
+type fakeNamedWebhook struct {
+	*fakeValidatingAdmissionHandler
+}
+
+func (f *fakeNamedWebhook) Name() string {
+	return "testing"
+}
+
+func TestNewDefaultMutatingWebhookName(t *testing.T) {
+	nameTests := map[string]struct {
+		handler  admission.WebhookHandler
+		wantName string
+	}{
+		"name derived from GVK": {
+			handler: &fakeValidatingAdmissionHandler{
+				gvr: schema.GroupVersionResource{
+					Group:    "test.cattle.io",
+					Version:  "v1alpha1",
+					Resource: "resources",
+				},
+				operations: []v1.OperationType{
+					v1.Create,
+				},
+			},
+			wantName: "rancher.cattle.io.resources.test.cattle.io",
+		},
+		"name provided by handler": {
+			handler: &fakeNamedWebhook{
+				fakeValidatingAdmissionHandler: &fakeValidatingAdmissionHandler{
+					gvr: schema.GroupVersionResource{
+						Group:    "test.cattle.io",
+						Version:  "v1alpha1",
+						Resource: "resources",
+					},
+					operations: []v1.OperationType{
+						v1.Create,
+					},
+				},
+			},
+			wantName: "testing",
+		},
+	}
+
+	for name, tt := range nameTests {
+		t.Run(name, func(t *testing.T) {
+			hook := admission.NewDefaultMutatingWebhook(tt.handler, v1.WebhookClientConfig{}, v1.NamespacedScope, []v1.OperationType{})
+			assert.Equal(t, tt.wantName, hook.Name)
+		})
+	}
+}

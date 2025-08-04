@@ -33,6 +33,13 @@ var (
 	SlowTraceDuration = time.Second * 2
 )
 
+// NamedWebhookHandler is an optional interface for WebhookHandlers, if a
+// WebhookHandler implementation provides this method, the name for the Webhook
+// will be provided by the WebhookHandler.
+type NamedWebhookHandler interface {
+	Name() string
+}
+
 // WebhookHandler base interface for both ValidatingAdmissionHandler and MutatingAdmissionHandler.
 // WebhookHandler is used for creating new http.HandlerFunc for each Webhook.
 type WebhookHandler interface {
@@ -155,8 +162,14 @@ func defaultWebhookInfo(handler WebhookHandler, clientConfig v1.WebhookClientCon
 		newService.Path = &newPath
 		clientConfig.Service = newService
 	}
+
+	name := CreateWebhookName(handler, "")
+	if v, ok := handler.(NamedWebhookHandler); ok {
+		name = v.Name()
+	}
+
 	return webhookInfo{
-		name:         CreateWebhookName(handler, ""),
+		name:         name,
 		clientConfig: clientConfig,
 		rules:        rules,
 	}
